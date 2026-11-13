@@ -1,0 +1,11 @@
+# Node dependencies
+node_modules/
+dist/
+
+# Rust / Tauri build artifacts
+src-tauri/target/
+
+# Logs & temp
+*.log
+.DS_Store
+Thumbs.db

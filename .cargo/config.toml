@@ -1,0 +1,11 @@
+[target.x86_64-pc-windows-msvc]
+rustflags = [
+  "-C", "link-arg=/LIBPATH:C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\SDK\\ScopeCppSDK\\vc15\\VC\\lib",
+  "-C", "link-arg=/LIBPATH:C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\SDK\\ScopeCppSDK\\vc15\\SDK\\lib",
+]
+
+[env]
+PATH = { value = "C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\SDK\\ScopeCppSDK\\vc15\\VC\\bin;C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\SDK\\ScopeCppSDK\\vc15\\SDK\\bin", relative = false }
+LIB = { value = "C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\SDK\\ScopeCppSDK\\vc15\\VC\\lib;C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\SDK\\ScopeCppSDK\\vc15\\SDK\\lib", relative = false }
+INCLUDE = { value = "C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\SDK\\ScopeCppSDK\\vc15\\VC\\include;C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\SDK\\ScopeCppSDK\\vc15\\SDK\\include\\um;C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\SDK\\ScopeCppSDK\\vc15\\SDK\\include\\shared;C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\SDK\\ScopeCppSDK\\vc15\\SDK\\include\\ucrt", relative = false }
+RC = { value = "C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\SDK\\ScopeCppSDK\\vc15\\SDK\\bin\\rc.exe", relative = false }
