@@ -51,6 +51,21 @@ describe('RAWTYPE Shared Core & Multi-Platform Engine Tests', () => {
     const punctCorr = res.corrections.find(c => c.correction_type === 'punctuation');
     expect(punctCorr?.original_text).toBe('tersebut');
     expect(punctCorr?.proposed_text).toBe('tersebut.');
+
+    // Verify two-letter words like 'gw', 'ia', 'di', 'ke' preserve their second letter
+    const gwRes = refineTextShared('test-gw', 'gw mau pergi sekarang', {
+      mode: 'standard',
+      fix_capitalization: true,
+      fix_punctuation: true,
+      fix_spelling: true,
+      fix_dialogue: true,
+      fix_whitespace: true,
+    });
+    expect(gwRes.refined_text).toBe('Gw mau pergi sekarang.');
+    expect(gwRes.refined_text).not.toContain('G mau');
+    const gwCap = gwRes.corrections.find(c => c.correction_type === 'capitalization');
+    expect(gwCap?.original_text).toBe('gw');
+    expect(gwCap?.proposed_text).toBe('Gw');
   });
 
   it('preserves protected vocabulary from spell correction', () => {
