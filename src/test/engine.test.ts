@@ -20,7 +20,37 @@ describe('RAWTYPE Shared Core & Multi-Platform Engine Tests', () => {
 
     expect(res.refined_text).toContain('apotek');
     expect(res.refined_text).toContain('antre');
+    expect(res.refined_text).toContain('Pagi');
     expect(res.corrections.length).toBeGreaterThan(0);
+  });
+
+  it('correctly handles sentence start capitalization and elongated vowels without truncating letters', () => {
+    const raw = 'pada saaat saya melihat sesuatu di dalam peti tersebut';
+    const res = refineTextShared('test-user-sentence', raw, {
+      mode: 'standard',
+      fix_capitalization: true,
+      fix_punctuation: true,
+      fix_spelling: true,
+      fix_dialogue: true,
+      fix_whitespace: true,
+    });
+
+    expect(res.refined_text).toBe('Pada saat saya melihat sesuatu di dalam peti tersebut.');
+    expect(res.refined_text).not.toContain('Pda');
+    expect(res.refined_text).not.toContain('saaat');
+
+    // Verify individual corrections
+    const capCorr = res.corrections.find(c => c.correction_type === 'capitalization');
+    expect(capCorr?.original_text).toBe('pada');
+    expect(capCorr?.proposed_text).toBe('Pada');
+
+    const spellCorr = res.corrections.find(c => c.correction_type === 'spelling');
+    expect(spellCorr?.original_text).toBe('saaat');
+    expect(spellCorr?.proposed_text).toBe('saat');
+
+    const punctCorr = res.corrections.find(c => c.correction_type === 'punctuation');
+    expect(punctCorr?.original_text).toBe('tersebut');
+    expect(punctCorr?.proposed_text).toBe('tersebut.');
   });
 
   it('preserves protected vocabulary from spell correction', () => {

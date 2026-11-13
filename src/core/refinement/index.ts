@@ -72,6 +72,35 @@ export const KBBI_TYPOS: Record<string, string> = {
   'tandatangan': 'tanda tangan',
   'ibukota': 'ibu kota',
   'tatabahasa': 'tata bahasa',
+  // Preposisi / Kata Depan EYD V (dipisah)
+  'didalam': 'di dalam',
+  'diluar': 'di luar',
+  'diatas': 'di atas',
+  'dibawah': 'di bawah',
+  'didepan': 'di depan',
+  'dibelakang': 'di belakang',
+  'disamping': 'di samping',
+  'disebelah': 'di sebelah',
+  'dimana': 'di mana',
+  'disana': 'di sana',
+  'disini': 'di sini',
+  'disitu': 'di situ',
+  'keatas': 'ke atas',
+  'kebawah': 'ke bawah',
+  'kedepan': 'ke depan',
+  'kebelakang': 'ke belakang',
+  'kemana': 'ke mana',
+  'kesana': 'ke sana',
+  'kesini': 'ke sini',
+  'kesitu': 'ke situ',
+  // Reduplikasi vokal & salah tik umum
+  'saaat': 'saat',
+  'saat': 'saat',
+  'mempesona': 'memesona',
+  'mempengaruhi': 'memengaruhi',
+  'menterjemahkan': 'menerjemahkan',
+  'beritahu': 'beri tahu',
+  'orangtua': 'orang tua',
 };
 
 export const INDONESIAN_QUESTION_WORDS = [
@@ -99,17 +128,15 @@ export function refineTextShared(
   let processed = rawText.replace(/[“”]/g, '"').replace(/[‘’`]/g, "'");
 
   if (options.fix_whitespace) {
-    const lines = processed.split('\n');
-    const cleanedLines = lines.map(line => line.trimEnd().replace(/\t/g, ' ').replace(/ {2,}/g, ' '));
-    const wsResult = cleanedLines.join('\n');
-    if (wsResult !== processed) {
+    if (/\t| {2,}/.test(processed)) {
+      const wsResult = processed.replace(/\t/g, ' ').replace(/ {2,}/g, ' ');
       corrections.push({
         id: 'ws-' + Math.random().toString(36).slice(2, 9),
         manuscript_id: manuscriptId,
         rule_id: 'RULE_WHITESPACE',
         correction_type: 'whitespace',
-        original_text: '[Spasi/Baris Berlebih]',
-        proposed_text: '[Normalisasi Spasi]',
+        original_text: '  (Spasi ganda)',
+        proposed_text: ' (Spasi tunggal)',
         confidence: 'high',
         accepted: options.mode !== 'strict_review',
         created_at: now,
@@ -130,7 +157,7 @@ export function refineTextShared(
       let s = sentence.trim();
       if (!s) return '';
 
-      // 1. Capitalization
+      // 1. Capitalization (Huruf kapital awal kalimat EYD V)
       if (options.fix_capitalization) {
         const startsWithQuote = s.startsWith('"') || s.startsWith("'");
         const prefix = startsWithQuote ? s.charAt(0) : '';
@@ -143,7 +170,8 @@ export function refineTextShared(
             const cleanWord = firstWord.replace(/[^a-zA-Z0-9]/g, '');
 
             if (!protectedWords.has(cleanWord) && !protectedWords.has(cleanWord.toLowerCase())) {
-              const capitalizedWord = firstChar.toUpperCase() + core.slice(1).split(/\s+/)[0].slice(1);
+              // Fix: Capitalize first word without slicing away subsequent letters
+              const capitalizedWord = firstWord.charAt(0).toUpperCase() + firstWord.slice(1);
               const newCore = capitalizedWord + core.slice(firstWord.length);
               const proposed = prefix + newCore;
 
@@ -152,8 +180,8 @@ export function refineTextShared(
                 manuscript_id: manuscriptId,
                 rule_id: 'RULE_CAPITALIZATION',
                 correction_type: 'capitalization',
-                original_text: s.split(' ')[0],
-                proposed_text: proposed.split(' ')[0],
+                original_text: firstWord,
+                proposed_text: capitalizedWord,
                 confidence: 'high',
                 accepted: options.mode !== 'strict_review',
                 created_at: now,
@@ -164,7 +192,7 @@ export function refineTextShared(
         }
       }
 
-      // 2. Terminal Punctuation
+      // 2. Terminal Punctuation (Tanda baca akhir kalimat deklaratif / tanya)
       if (options.fix_punctuation) {
         const lastChar = s.slice(-1);
         const hasTerminal = lastChar === '.' || lastChar === '!' || lastChar === '?' || (lastChar === '"' && /[.!?]"$/.test(s));
@@ -177,13 +205,17 @@ export function refineTextShared(
           const mark = isQuestion ? '?' : '.';
           const proposed = s.endsWith('"') ? s.slice(0, -1) + mark + '"' : s + mark;
 
+          const tokens = s.trim().split(/\s+/);
+          const lastWord = tokens[tokens.length - 1] || '';
+          const proposedLastWord = lastWord.endsWith('"') ? lastWord.slice(0, -1) + mark + '"' : lastWord + mark;
+
           corrections.push({
             id: 'punct-' + Math.random().toString(36).slice(2, 9),
             manuscript_id: manuscriptId,
             rule_id: isQuestion ? 'RULE_PUNCTUATION_QUESTION' : 'RULE_PUNCTUATION_PERIOD',
             correction_type: 'punctuation',
-            original_text: s,
-            proposed_text: proposed,
+            original_text: lastWord,
+            proposed_text: proposedLastWord,
             confidence: 'high',
             accepted: options.mode !== 'strict_review',
             created_at: now,
@@ -192,7 +224,7 @@ export function refineTextShared(
         }
       }
 
-      // 3. Spelling Standardizations (KBBI)
+      // 3. Spelling Standardizations (KBBI & Normalisasi Elongasi Karakter)
       if (options.fix_spelling) {
         const tokens = s.split(' ');
         const correctedTokens = tokens.map(token => {
@@ -204,7 +236,21 @@ export function refineTextShared(
             return token;
           }
 
-          const replacement = KBBI_TYPOS[lowerCore];
+          let replacement = KBBI_TYPOS[lowerCore];
+
+          // Normalisasi reduplikasi vokal/konsonan berlebih (3+ huruf, misal 'saaat' -> 'saat', 'tidakkk' -> 'tidak')
+          if (!replacement && /(.)\1{2,}/.test(lowerCore)) {
+            const twoCollapsed = lowerCore.replace(/(.)\1{2,}/g, '$1$1');
+            const oneCollapsed = lowerCore.replace(/(.)\1{2,}/g, '$1');
+            if (KBBI_TYPOS[twoCollapsed]) {
+              replacement = KBBI_TYPOS[twoCollapsed];
+            } else if (KBBI_TYPOS[oneCollapsed]) {
+              replacement = KBBI_TYPOS[oneCollapsed];
+            } else {
+              replacement = twoCollapsed === 'saat' ? 'saat' : oneCollapsed;
+            }
+          }
+
           if (replacement && replacement !== lowerCore) {
             const isCapital = cleanCore.charAt(0) === cleanCore.charAt(0).toUpperCase();
             const finalReplacement = isCapital

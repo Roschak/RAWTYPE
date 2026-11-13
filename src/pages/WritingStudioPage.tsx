@@ -105,8 +105,8 @@ export const WritingStudioPage: React.FC<WritingStudioPageProps> = ({ initialMan
     setTitle(m.title);
     setAuthor(m.author);
     setCategory(m.category);
-    setRawText(m.original_content);
-    setRefinedText(m.refined_content);
+    setRawText(m.original_content || m.refined_content || '');
+    setRefinedText(m.refined_content || m.original_content || '');
     setCorrections([]);
     setUndoStack([]);
     setRedoStack([]);
@@ -197,34 +197,143 @@ export const WritingStudioPage: React.FC<WritingStudioPageProps> = ({ initialMan
   };
 
   const acceptCorrection = (corrId: string) => {
+    const target = corrections.find((c) => c.id === corrId);
+    if (!target) return;
+
+    // Save undo history before applying
+    setUndoStack((prev) => [...prev.slice(-20), rawText]);
+    setRedoStack([]);
+
+    // 1. Mark as accepted in state
     setCorrections((prev) =>
       prev.map((c) => (c.id === corrId ? { ...c, accepted: true } : c))
     );
+
+    const replaceInText = (text: string, orig: string, prop: string) => {
+      if (text.includes(orig)) {
+        return text.replace(orig, prop);
+      }
+      const escaped = orig.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const re = new RegExp(escaped, 'i');
+      if (re.test(text)) {
+        return text.replace(re, prop);
+      }
+      return text;
+    };
+
+    // 2. Immediately apply fix to rawText and refinedText
+    if (target.rule_id === 'RULE_WHITESPACE') {
+      const clean = (text: string) =>
+        text
+          .split('\n')
+          .map((line) => line.trimEnd().replace(/\t/g, ' ').replace(/ {2,}/g, ' '))
+          .join('\n');
+      setRawText((prev) => clean(prev));
+      setRefinedText((prev) => clean(prev));
+    } else if (target.original_text && target.proposed_text) {
+      setRawText((prev) => replaceInText(prev, target.original_text, target.proposed_text));
+      setRefinedText((prev) => replaceInText(prev, target.original_text, target.proposed_text));
+    }
+
+    setSaveStatus('dirty');
   };
 
   const rejectCorrection = (corrId: string) => {
     const target = corrections.find((c) => c.id === corrId);
     if (!target) return;
+
+    // Save undo history before reverting
+    setUndoStack((prev) => [...prev.slice(-20), rawText]);
+    setRedoStack([]);
+
     setCorrections((prev) =>
       prev.map((c) => (c.id === corrId ? { ...c, accepted: false } : c))
     );
-    // Revert that piece in refinedText
-    setRefinedText((prev) => prev.replace(target.proposed_text, target.original_text));
+
+    const replaceInText = (text: string, orig: string, prop: string) => {
+      if (text.includes(orig)) {
+        return text.replace(orig, prop);
+      }
+      const escaped = orig.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const re = new RegExp(escaped, 'i');
+      if (re.test(text)) {
+        return text.replace(re, prop);
+      }
+      return text;
+    };
+
+    // Revert that piece in both refinedText and rawText
+    if (target.original_text && target.proposed_text && target.rule_id !== 'RULE_WHITESPACE') {
+      setRefinedText((prev) => replaceInText(prev, target.proposed_text, target.original_text));
+      setRawText((prev) => replaceInText(prev, target.proposed_text, target.original_text));
+    }
+
+    setSaveStatus('dirty');
   };
 
   const acceptAllCorrections = () => {
+    if (corrections.length === 0) return;
+
+    // Save undo history before applying all
+    setUndoStack((prev) => [...prev.slice(-20), rawText]);
+    setRedoStack([]);
+
     setCorrections((prev) => prev.map((c) => ({ ...c, accepted: true })));
+
+    const replaceInText = (text: string, orig: string, prop: string) => {
+      if (text.includes(orig)) {
+        return text.replace(orig, prop);
+      }
+      const escaped = orig.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const re = new RegExp(escaped, 'i');
+      if (re.test(text)) {
+        return text.replace(re, prop);
+      }
+      return text;
+    };
+
+    let newRaw = rawText;
+    let newRefined = refinedText;
+
+    for (const corr of corrections) {
+      if (corr.rule_id === 'RULE_WHITESPACE') {
+        const clean = (text: string) =>
+          text
+            .split('\n')
+            .map((line) => line.trimEnd().replace(/\t/g, ' ').replace(/ {2,}/g, ' '))
+            .join('\n');
+        newRaw = clean(newRaw);
+        newRefined = clean(newRefined);
+      } else if (corr.original_text && corr.proposed_text) {
+        newRaw = replaceInText(newRaw, corr.original_text, corr.proposed_text);
+        newRefined = replaceInText(newRefined, corr.original_text, corr.proposed_text);
+      }
+    }
+
+    setRawText(newRaw);
+    setRefinedText(newRefined);
+    setSaveStatus('dirty');
+  };
+
+  const applyRefinedToRaw = () => {
+    if (!refinedText) return;
+    setUndoStack((prev) => [...prev.slice(-20), rawText]);
+    setRedoStack([]);
+    setRawText(refinedText);
+    setCorrections((prev) => prev.map((c) => ({ ...c, accepted: true })));
+    setSaveStatus('dirty');
   };
 
   const restoreOriginal = () => {
     setRefinedText(rawText);
-    setCorrections([]);
+    setCorrections((prev) => prev.map((c) => ({ ...c, accepted: false })));
   };
 
   const saveManuscript = async (createNewVersion = false) => {
     if (!selectedManuscript) return;
     try {
       setSaveStatus('saving');
+      const contentToSave = refinedText || rawText;
       const updated = await api.updateManuscript(
         selectedManuscript.id,
         title,
@@ -232,7 +341,7 @@ export const WritingStudioPage: React.FC<WritingStudioPageProps> = ({ initialMan
         category,
         selectedManuscript.description,
         selectedManuscript.tags,
-        refinedText,
+        contentToSave,
         createNewVersion
       );
       setSelectedManuscript(updated);
@@ -592,6 +701,14 @@ export const WritingStudioPage: React.FC<WritingStudioPageProps> = ({ initialMan
                   </div>
                   <div className="flex items-center space-x-2">
                     <button
+                      onClick={applyRefinedToRaw}
+                      className="px-2 py-0.5 rounded bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/40 text-[11px] font-medium flex items-center space-x-1"
+                      title="Salin dan terapkan seluruh hasil perbaikan ke Draf RAW"
+                    >
+                      <CheckCheck className="w-3 h-3" />
+                      <span>Terapkan ke RAW</span>
+                    </button>
+                    <button
                       onClick={restoreOriginal}
                       className="text-[11px] text-zinc-400 hover:text-zinc-200 flex items-center space-x-1"
                     >
@@ -672,7 +789,11 @@ export const WritingStudioPage: React.FC<WritingStudioPageProps> = ({ initialMan
                     <div className="flex items-center justify-end gap-1.5 pt-1.5 border-t border-zinc-800/60">
                       <button
                         onClick={() => rejectCorrection(corr.id)}
-                        className="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white text-[11px] flex items-center gap-1"
+                        className={`px-2 py-0.5 rounded text-[11px] flex items-center gap-1 transition-colors ${
+                          !corr.accepted
+                            ? 'bg-rose-900/30 text-rose-300 border border-rose-500/30'
+                            : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white'
+                        }`}
                         title="Tolak koreksi"
                       >
                         <X className="w-3 h-3" />
@@ -680,11 +801,15 @@ export const WritingStudioPage: React.FC<WritingStudioPageProps> = ({ initialMan
                       </button>
                       <button
                         onClick={() => acceptCorrection(corr.id)}
-                        className="px-2 py-0.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-medium flex items-center gap-1"
+                        className={`px-2 py-0.5 rounded text-[11px] font-medium flex items-center gap-1 transition-colors ${
+                          corr.accepted
+                            ? 'bg-emerald-600/30 text-emerald-300 border border-emerald-500/40'
+                            : 'bg-indigo-600 hover:bg-indigo-500 text-white'
+                        }`}
                         title="Terima koreksi"
                       >
                         <Check className="w-3 h-3" />
-                        <span>Terima</span>
+                        <span>{corr.accepted ? 'Diterima' : 'Terima'}</span>
                       </button>
                     </div>
                   </div>

@@ -85,6 +85,21 @@ impl SpellingEngine {
             ("tandatangan", "tanda tangan"),
             ("ibukota", "ibu kota"),
             ("tatabahasa", "tata bahasa"),
+            ("saaat", "saat"),
+            ("didalam", "di dalam"),
+            ("diluar", "di luar"),
+            ("diatas", "di atas"),
+            ("dibawah", "di bawah"),
+            ("didepan", "di depan"),
+            ("dibelakang", "di belakang"),
+            ("dimana", "di mana"),
+            ("disana", "di sana"),
+            ("disini", "di sini"),
+            ("kemana", "ke mana"),
+            ("orangtua", "orang tua"),
+            ("beritahu", "beri tahu"),
+            ("mempesona", "memesona"),
+            ("mempengaruhi", "memengaruhi"),
         ];
 
         for (non_std, std) in pairs {
